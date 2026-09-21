@@ -17,7 +17,7 @@ workflows:
       groups:
         - wasalah_env
       vars:
-        PACKAGE_NAME: "wasalah"
+        PACKAGE_NAME: "com.wasalah.app"
     scripts:
       - name: توليد مجلد android لو غير موجود
         script: |
