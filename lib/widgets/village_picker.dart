@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../data/menofia_data.dart';
+export '../data/menofia_data.dart';
 import '../theme/app_theme.dart';
 
 /// يفتح شاشة اختيار قرية من قرى محافظة المنوفية (مقسّمة حسب المركز)،
