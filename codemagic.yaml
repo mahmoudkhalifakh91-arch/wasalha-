@@ -17,8 +17,17 @@ workflows:
       groups:
         - wasalah_env
       vars:
-        PACKAGE_NAME: "com.wasalah.app"
+        PACKAGE_NAME: "wasalah"
     scripts:
+      - name: توليد مجلد android لو غير موجود
+        script: |
+          if [ ! -f "android/app/build.gradle" ]; then
+            echo "مجلد android مش موجود - جاري توليده..."
+            flutter create --platforms=android --org com.wasalah .
+          else
+            echo "مجلد android موجود بالفعل"
+          fi
+
       - name: تثبيت الباكدجات
         script: flutter pub get
 
