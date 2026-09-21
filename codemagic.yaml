@@ -41,7 +41,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - mahmoudkhalifa.kh91@gmail.com
         notify:
           success: true
           failure: true
@@ -87,7 +87,7 @@ workflows:
     publishing:
       email:
         recipients:
-          - your-email@example.com
+          - mahmoudkhalifa.kh91@gmail.com
         notify:
           success: true
           failure: true
