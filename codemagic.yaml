@@ -1,11 +1,11 @@
-# إعداد Codemagic لتطبيق وصلها (Flutter)
+# إعداد Codemagic لتطبيق وصلها (Flutter) - Android فقط
 #
 # قبل ما تستخدم الملف ده، لازم:
-# 1) تشغّل `flutter create --org com.wasalah .` محليًا وترفع android/ و ios/ على Git
+# 1) تشغّل `flutter create --org com.wasalah .` محليًا وترفع android/ على Git
 #    (Codemagic بيبني المشروع زي ما هو من الريبو، مش بيولّد المنصات بنفسه)
-# 2) تظبط applicationId/bundle ID يبقوا متطابقين مع القيم هنا (BUNDLE_ID/PACKAGE_NAME)
-#    أو تعدّل القيم دي تحت لو سبت الـ ID اللي اتولّد افتراضيًا
-# التفاصيل الكاملة موجودة في قسم "النشر عبر Codemagic" في README.md
+# 2) تظبط applicationId يبقى متطابق مع القيمة هنا (PACKAGE_NAME)
+#    أو تعدّل القيمة دي تحت لو سبت الـ ID اللي اتولّد افتراضيًا
+# 3) غيّر your-email@example.com تحت لإيميلك الحقيقي
 
 workflows:
   android-workflow:
@@ -45,52 +45,3 @@ workflows:
         notify:
           success: true
           failure: true
-
-  ios-workflow:
-    name: وصلها - iOS
-    max_build_duration: 60
-    instance_type: mac_mini_m2
-    environment:
-      flutter: stable
-      groups:
-        - wasalah_env
-        - ios_signing
-      vars:
-        BUNDLE_ID: "com.wasalah.app"
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.wasalah.app
-    scripts:
-      - name: تثبيت الباكدجات
-        script: flutter pub get
-
-      - name: حقن مفتاح Gemini (لو موجود كمتغيّر بيئة)
-        script: |
-          if [ -n "${GEMINI_API_KEY:-}" ]; then
-            sed -i '' "s/YOUR_GEMINI_API_KEY_HERE/${GEMINI_API_KEY}/" lib/config/ai_config.dart
-          fi
-
-      - name: تثبيت CocoaPods
-        script: cd ios && pod install
-
-      - name: إعداد التوقيع التلقائي
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
-          keychain add-certificates
-          xcode-project use-profiles
-
-      - name: بناء IPA
-        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
-    artifacts:
-      - build/ios/ipa/*.ipa
-    publishing:
-      email:
-        recipients:
-          - mahmoudkhalifa.kh91@gmail.com
-        notify:
-          success: true
-          failure: true
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
