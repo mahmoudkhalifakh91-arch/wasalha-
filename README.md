@@ -75,6 +75,40 @@ match /profile_photos/{userId}.jpg {
 - الشات المباشر، الإشعارات (FCM)، المساعد الذكي (AI Assistant)
 - الخريطة التفاعلية لاختيار الموقع (المكتبة `flutter_map` مضافة بالفعل في `pubspec.yaml` تحضيرًا لكده)
 
+## 🏗️ النشر عبر Codemagic (CI/CD)
+
+الأرشيف فيه `codemagic.yaml` جاهز (workflow لـ Android و iOS)، لكن فيه خطوات لازم تعملها **قبل** ما ترفع المشروع على Git وتوصّله بـ Codemagic، لأن Codemagic بيبني المشروع زي ما هو من الريبو - مش بيولّد مجلدات المنصات بنفسه:
+
+### 1) ولّد مجلدات android/ios محليًا وارفعها على Git (خطوة إجبارية)
+```bash
+cd wasalah_app
+flutter create --org com.wasalah .
+git init
+git add .
+git commit -m "أول نسخة - تطبيق وصلها Flutter"
+git remote add origin <رابط الريبو بتاعك>
+git push -u origin main
+```
+⚠️ الأمر ده هيولّد `applicationId` على الشكل `com.wasalah.wasalah_app` (مش `com.wasalah.app` المكتوب في `codemagic.yaml` و`firebase_options.dart` كقيمة افتراضية). عندك خياران:
+- **الأسهل**: افتح `android/app/build.gradle` (قسم `defaultConfig`) وغيّر `applicationId` يبقى `com.wasalah.app`، وكذلك في Xcode غيّر `PRODUCT_BUNDLE_IDENTIFIER` لنفس القيمة - عشان يتطابق مع كل حاجة تانية في المشروع من غير ما تعدّل حاجة تانية.
+- **أو**: سيب الـ ID اللي اتولّد زي ما هو، وعدّل بدل منه القيم في `codemagic.yaml` (`BUNDLE_ID` و`PACKAGE_NAME`) و`lib/firebase_options.dart` (`iosBundleId`) عشان تتطابق معاه.
+
+### 2) سجّل تطبيقي Android وiOS في Firebase Console
+لازم تضيف تطبيق Android وتطبيق iOS في نفس مشروع Firebase (`sada-51292`) بنفس الـ applicationId/bundle ID اللي استقريت عليه فوق، وبعدين شغّل:
+```bash
+dart pub global activate flutterfire_cli
+flutterfire configure --project=sada-51292
+```
+ده هيحدّث `lib/firebase_options.dart` تلقائيًا بقيم appId حقيقية بدل القيم المؤقتة (placeholder). **مش محتاج ترفع `google-services.json` أو `GoogleService-Info.plist` خالص** - التطبيق بيتهيّأ عن طريق `FirebaseOptions` مباشرة في الكود، فالخطوة دي كفاية.
+
+### 3) جهّز إعدادات Codemagic من الـ UI
+- **Environment variables**: اعمل جروب اسمه `wasalah_env` وحط فيه `GEMINI_API_KEY` (Secure) لو عايز المساعد الذكي يشتغل في البيلد - الـ script بيحقنه أوتوماتيك في `lib/config/ai_config.dart` وقت البناء، فمينفعش تحط المفتاح في الكود نفسه على Git.
+- **Android signing**: لو عايز توقّع الـ APK/AAB لنشره على Google Play، ارفع الـ keystore بتاعك من (Settings → Code signing identities) وفعّل السطر المعلّق في `codemagic.yaml` تحت `android_signing`.
+- **iOS signing**: اعمل جروب `ios_signing` واربط حساب Apple Developer بتاعك (Automatic code signing) من إعدادات Codemagic - الـ `ios-workflow` مبني على افتراض التوقيع التلقائي ده.
+
+### 4) شغّل البيلد
+من Codemagic، اختار الـ workflow (`android-workflow` أو `ios-workflow`) واضغط Start new build.
+
 ## 🚀 خطوات التشغيل
 
 ```bash
@@ -127,6 +161,8 @@ lib/
   main.dart                             # نقطة البداية
 functions/
   index.js                              # Cloud Function لإرسال Push حقيقي
+codemagic.yaml                          # إعداد CI/CD لبناء Android وiOS
+.gitignore                              # استثناءات Git القياسية لمشاريع Flutter
 ```
 
 قولّي تحب نكمل بإيه بعد كده (تقييم الرحلة، سحب الأرباح، أو أي تعديل على اللي موجود).

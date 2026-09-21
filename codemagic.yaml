@@ -1,0 +1,96 @@
+# إعداد Codemagic لتطبيق وصلها (Flutter)
+#
+# قبل ما تستخدم الملف ده، لازم:
+# 1) تشغّل `flutter create --org com.wasalah .` محليًا وترفع android/ و ios/ على Git
+#    (Codemagic بيبني المشروع زي ما هو من الريبو، مش بيولّد المنصات بنفسه)
+# 2) تظبط applicationId/bundle ID يبقوا متطابقين مع القيم هنا (BUNDLE_ID/PACKAGE_NAME)
+#    أو تعدّل القيم دي تحت لو سبت الـ ID اللي اتولّد افتراضيًا
+# التفاصيل الكاملة موجودة في قسم "النشر عبر Codemagic" في README.md
+
+workflows:
+  android-workflow:
+    name: وصلها - Android
+    max_build_duration: 60
+    instance_type: linux_x2
+    environment:
+      flutter: stable
+      groups:
+        - wasalah_env
+      vars:
+        PACKAGE_NAME: "com.wasalah.app"
+    scripts:
+      - name: تثبيت الباكدجات
+        script: flutter pub get
+
+      - name: حقن مفتاح Gemini (لو موجود كمتغيّر بيئة)
+        script: |
+          if [ -n "${GEMINI_API_KEY:-}" ]; then
+            sed -i "s/YOUR_GEMINI_API_KEY_HERE/${GEMINI_API_KEY}/" lib/config/ai_config.dart
+          else
+            echo "تنبيه: GEMINI_API_KEY مش موجود كمتغيّر بيئة - المساعد الذكي هيفضل معطّل"
+          fi
+
+      - name: بناء APK
+        script: flutter build apk --release
+
+      - name: بناء App Bundle (للنشر على Google Play)
+        script: flutter build appbundle --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      - build/app/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+
+  ios-workflow:
+    name: وصلها - iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      groups:
+        - wasalah_env
+        - ios_signing
+      vars:
+        BUNDLE_ID: "com.wasalah.app"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.wasalah.app
+    scripts:
+      - name: تثبيت الباكدجات
+        script: flutter pub get
+
+      - name: حقن مفتاح Gemini (لو موجود كمتغيّر بيئة)
+        script: |
+          if [ -n "${GEMINI_API_KEY:-}" ]; then
+            sed -i '' "s/YOUR_GEMINI_API_KEY_HERE/${GEMINI_API_KEY}/" lib/config/ai_config.dart
+          fi
+
+      - name: تثبيت CocoaPods
+        script: cd ios && pod install
+
+      - name: إعداد التوقيع التلقائي
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" --type IOS_APP_STORE --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: بناء IPA
+        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      email:
+        recipients:
+          - your-email@example.com
+        notify:
+          success: true
+          failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
