@@ -34,47 +34,47 @@ workflows:
           [ -f "$GRADLE_FILE" ] || GRADLE_FILE="android/app/build.gradle"
           if [ -f "$GRADLE_FILE" ] && ! grep -q "isCoreLibraryDesugaringEnabled\|coreLibraryDesugaringEnabled" "$GRADLE_FILE"; then
             python3 - "$GRADLE_FILE" <<'PYEOF'
-import sys
-path = sys.argv[1]
-with open(path) as f:
-    content = f.read()
+          import sys
+          path = sys.argv[1]
+          with open(path) as f:
+              content = f.read()
 
-if path.endswith(".kts"):
-    if "compileOptions {" in content:
-        content = content.replace(
-            "compileOptions {",
-            "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
-            1,
-        )
-    if "coreLibraryDesugaring(" not in content:
-        if "dependencies {" in content:
-            content = content.replace(
-                "dependencies {",
-                'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
-                1,
-            )
-        else:
-            content += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
-else:
-    if "compileOptions {" in content:
-        content = content.replace(
-            "compileOptions {",
-            "compileOptions {\n        coreLibraryDesugaringEnabled true",
-            1,
-        )
-    if "coreLibraryDesugaring " not in content and "coreLibraryDesugaring(" not in content:
-        if "dependencies {" in content:
-            content = content.replace(
-                "dependencies {",
-                "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",
-                1,
-            )
-        else:
-            content += "\n\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
+          if path.endswith(".kts"):
+              if "compileOptions {" in content:
+                  content = content.replace(
+                      "compileOptions {",
+                      "compileOptions {\n        isCoreLibraryDesugaringEnabled = true",
+                      1,
+                  )
+              if "coreLibraryDesugaring(" not in content:
+                  if "dependencies {" in content:
+                      content = content.replace(
+                          "dependencies {",
+                          'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
+                          1,
+                      )
+                  else:
+                      content += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          else:
+              if "compileOptions {" in content:
+                  content = content.replace(
+                      "compileOptions {",
+                      "compileOptions {\n        coreLibraryDesugaringEnabled true",
+                      1,
+                  )
+              if "coreLibraryDesugaring " not in content and "coreLibraryDesugaring(" not in content:
+                  if "dependencies {" in content:
+                      content = content.replace(
+                          "dependencies {",
+                          "dependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",
+                          1,
+                      )
+                  else:
+                      content += "\n\ndependencies {\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'\n}\n"
 
-with open(path, "w") as f:
-    f.write(content)
-PYEOF
+          with open(path, "w") as f:
+              f.write(content)
+          PYEOF
             echo "تم تفعيل desugaring في $GRADLE_FILE"
           else
             echo "desugaring مفعّل بالفعل أو الملف مش موجود"
