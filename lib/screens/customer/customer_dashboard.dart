@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
 import '../../services/firebase_service.dart';
 import '../../theme/app_theme.dart';
@@ -9,7 +10,9 @@ import '../notifications_screen.dart';
 import '../ai_assistant_screen.dart';
 import '../../services/push_service.dart';
 import '../../widgets/profile_avatar.dart';
+import '../support_screen.dart';
 import 'order_tracking_screen.dart';
+import 'wallet_screen.dart';
 
 class CustomerDashboard extends StatefulWidget {
   final AppUser user;
@@ -40,7 +43,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
         title: Text('أهلًا، ${widget.user.name}'),
         actions: [
           StreamBuilder<int>(
-            stream: FirebaseService.instance.unreadNotificationsCount(widget.user.id),
+            stream: FirebaseService.instance.unreadNotificationsCount(widget.user.id, role: widget.user.role),
             builder: (context, snap) {
               final count = snap.data ?? 0;
               return Stack(
@@ -51,7 +54,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => NotificationsScreen(userId: widget.user.id)),
+                          builder: (_) => NotificationsScreen(userId: widget.user.id, role: widget.user.role)),
                     ),
                   ),
                   if (count > 0)
@@ -128,6 +131,17 @@ class _HomeTab extends StatelessWidget {
                 ...active.map((o) => _ActiveOrderCard(order: o, user: user)),
                 const SizedBox(height: 20),
               ],
+              StreamBuilder<List<Ad>>(
+                stream: FirebaseService.instance.activeAdsStream(),
+                builder: (context, adsSnap) {
+                  final ads = adsSnap.data ?? const [];
+                  if (ads.isEmpty) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: _AdsSlider(ads: ads),
+                  );
+                },
+              ),
               Text('إيه اللي محتاجه دلوقتي؟',
                   style: Theme.of(context)
                       .textTheme
@@ -392,8 +406,26 @@ class _ProfileTab extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           child: ListTile(
             leading: const Icon(Icons.account_balance_wallet_outlined),
-            title: const Text('رصيد المحفظة'),
-            trailing: Text('${user.wallet.balance.toStringAsFixed(0)} ج.م'),
+            title: const Text('محفظتي الرقمية'),
+            subtitle: Text('${user.wallet.balance.toStringAsFixed(0)} ج.م'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => WalletScreen(user: user)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: ListTile(
+            leading: const Icon(Icons.support_agent_outlined),
+            title: const Text('الدعم والملاحظات'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => SupportScreen(user: user)),
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -406,6 +438,188 @@ class _ProfileTab extends StatelessWidget {
           label: const Text('تسجيل الخروج'),
         ),
       ],
+    );
+  }
+}
+
+/// شريط إعلانات أفقي أعلى الرئيسية - مقابلة لمكوّن AdsSlider في CustomerDashboard.tsx
+class _AdsSlider extends StatelessWidget {
+  final List<Ad> ads;
+  const _AdsSlider({required this.ads});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 150,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: ads.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, i) {
+          final ad = ads[i];
+          return GestureDetector(
+            onTap: () => _showAdDetails(context, ad),
+            child: Container(
+              width: 300,
+              decoration: BoxDecoration(
+                color: AppColors.cardDark,
+                borderRadius: BorderRadius.circular(28),
+                image: ad.imageUrl.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(ad.imageUrl),
+                        fit: BoxFit.cover,
+                        colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.25), BlendMode.darken),
+                      )
+                    : null,
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Colors.black.withOpacity(0.85), Colors.transparent],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(ad.title,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                  color: Colors.white, fontWeight: FontWeight.w900, fontSize: 15)),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                                color: AppColors.primary, borderRadius: BorderRadius.circular(999)),
+                            child: Text(ad.ctaText.isEmpty ? 'اطلب الآن' : ad.ctaText,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showAdDetails(BuildContext context, Ad ad) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AdDetailsSheet(ad: ad),
+    );
+  }
+}
+
+/// تفاصيل الإعلان في شيت سفلي - مقابلة لمكوّن AdDetailsView في نسخة الويب
+class _AdDetailsSheet extends StatelessWidget {
+  final Ad ad;
+  const _AdDetailsSheet({required this.ad});
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      maxChildSize: 0.92,
+      minChildSize: 0.5,
+      expand: false,
+      builder: (context, scrollCtrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: ListView(
+            controller: scrollCtrl,
+            padding: EdgeInsets.zero,
+            children: [
+              AspectRatio(
+                aspectRatio: 21 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (ad.imageUrl.isNotEmpty)
+                      Image.network(ad.imageUrl, fit: BoxFit.cover)
+                    else
+                      Container(color: AppColors.cardDark),
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: InkWell(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.3),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(Icons.close, color: Colors.white, size: 20),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(ad.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    Container(width: 56, height: 5, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(999))),
+                    const SizedBox(height: 16),
+                    Text(ad.description,
+                        style: const TextStyle(fontSize: 13, height: 1.6, color: Colors.black54, fontWeight: FontWeight.w600)),
+                    if (ad.whatsappNumber != null && ad.whatsappNumber!.isNotEmpty) ...[
+                      const SizedBox(height: 22),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            FirebaseService.instance.incrementAdClicks(ad.id);
+                            final uri = Uri.parse('https://wa.me/${ad.whatsappNumber}');
+                            if (await canLaunchUrl(uri)) {
+                              launchUrl(uri, mode: LaunchMode.externalApplication);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF25D366),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          ),
+                          icon: const Icon(Icons.chat),
+                          label: Text(ad.ctaText.isEmpty ? 'اطلب عبر واتساب' : ad.ctaText,
+                              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

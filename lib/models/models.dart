@@ -398,6 +398,90 @@ class Zone {
       );
 }
 
+enum TransactionType { CREDIT, DEBIT }
+
+/// حركة مالية في محفظة المستخدم - مقابلة لواجهة Transaction في WalletView.tsx
+class WalletTransaction {
+  final String id;
+  final TransactionType type;
+  final double amount;
+  final String description;
+  final int createdAt;
+  const WalletTransaction({
+    required this.id,
+    required this.type,
+    required this.amount,
+    required this.description,
+    required this.createdAt,
+  });
+
+  factory WalletTransaction.fromMap(String id, Map<String, dynamic> m) => WalletTransaction(
+        id: id,
+        type: _enumFromString(TransactionType.values, m['type'], TransactionType.DEBIT),
+        amount: (m['amount'] as num?)?.toDouble() ?? 0,
+        description: m['description'] ?? '',
+        createdAt: (m['createdAt'] as num?)?.toInt() ?? 0,
+      );
+}
+
+enum PaymentRequestAction { TOPUP, WITHDRAW }
+
+enum AdType { special_offer, restaurant, service, general }
+
+/// إعلان/بانر ترويجي يظهر أعلى الرئيسية - مقابلة لواجهة Ad في types.ts
+class Ad {
+  final String id;
+  final String title;
+  final String description;
+  final String imageUrl;
+  final String ctaText;
+  final AdType type;
+  final String? targetId;
+  final OrderCategory? targetCategory;
+  final String? whatsappNumber;
+  final bool isActive;
+  final int displayOrder;
+  final int views;
+  final int clicks;
+  final int createdAt;
+
+  const Ad({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.imageUrl,
+    required this.ctaText,
+    required this.type,
+    this.targetId,
+    this.targetCategory,
+    this.whatsappNumber,
+    this.isActive = true,
+    this.displayOrder = 0,
+    this.views = 0,
+    this.clicks = 0,
+    this.createdAt = 0,
+  });
+
+  factory Ad.fromMap(String id, Map<String, dynamic> m) => Ad(
+        id: id,
+        title: m['title'] ?? '',
+        description: m['description'] ?? '',
+        imageUrl: m['imageUrl'] ?? '',
+        ctaText: m['ctaText'] ?? 'اطلب الآن',
+        type: _enumFromString(AdType.values, m['type'], AdType.general),
+        targetId: m['targetId'],
+        targetCategory: m['targetCategory'] != null
+            ? _enumFromString(OrderCategory.values, m['targetCategory'], OrderCategory.TAXI)
+            : null,
+        whatsappNumber: m['whatsappNumber'],
+        isActive: m['isActive'] ?? true,
+        displayOrder: (m['displayOrder'] as num?)?.toInt() ?? 0,
+        views: (m['views'] as num?)?.toInt() ?? 0,
+        clicks: (m['clicks'] as num?)?.toInt() ?? 0,
+        createdAt: (m['createdAt'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class ChatMessage {
   final String id;
   final String orderId;

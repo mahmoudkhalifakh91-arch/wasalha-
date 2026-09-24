@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/models.dart';
 
 /// طبقة الاتصال بـ Firebase - مقابلة لملف services/firebase.ts في نسخة الويب
@@ -13,6 +14,11 @@ class FirebaseService {
   Stream<User?> get authStateChanges => auth.authStateChanges();
   User? get currentAuthUser => auth.currentUser;
 
+  /// بيتفعّل مؤقتًا وقت ما شاشة الدخول/التسجيل بتكون بصدد إنشاء ملف بيانات
+  /// المستخدم بنفسها (مثلاً خطوة "إكمال البيانات" بعد جوجل)، عشان الـ AuthGate
+  /// ميعملش نسخة افتراضية بديلة تتعارض معاها أثناء نفس اللحظة
+  bool isCreatingUserProfile = false;
+
   // ---------- Auth ----------
   Future<UserCredential> signIn(String email, String password) {
     return auth.signInWithEmailAndPassword(email: email, password: password);
@@ -22,7 +28,27 @@ class FirebaseService {
     return auth.createUserWithEmailAndPassword(email: email, password: password);
   }
 
-  Future<void> signOut() => auth.signOut();
+  Future<void> signOut() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {
+      // المستخدم ممكن يكون سجل دخول بطريقة تانية غير جوجل - نتجاهل الخطأ
+    }
+    await auth.signOut();
+  }
+
+  /// تسجيل الدخول عبر جوجل - مقابلة لـ signInWithPopup(auth, googleProvider) في نسخة الويب
+  /// بترجع UserCredential، وبيحدد الكود المستدعي بعدين لو المستخدم جديد (محتاج يكمل بياناته) أو موجود بالفعل
+  Future<UserCredential?> signInWithGoogle() async {
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return null; // المستخدم لغى تسجيل الدخول
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+    return auth.signInWithCredential(credential);
+  }
 
   // ---------- Users ----------
   Future<void> createUserDoc(String uid, AppUser user) {
@@ -33,6 +59,37 @@ class FirebaseService {
     final doc = await db.collection('users').doc(uid).get();
     if (!doc.exists) return null;
     return AppUser.fromMap(doc.id, doc.data()!);
+  }
+
+  /// قائمة إيميلات المديرين الافتراضية - نفس القائمة الموجودة في App.tsx بنسخة الويب
+  static const List<String> _adminEmails = [
+    'admin@ashmoun.com',
+    'mahmoudkhalifa.kh91@gmail.com',
+    'sadat.planning.officer@dakahlia.net',
+    'admin@wasalah.com',
+    'wasalah.app@gmail.com',
+  ];
+
+  /// لو مفيش مستند مستخدم في Firestore لحساب مسجل دخول فعليًا (مثلاً حساب
+  /// اتعمل يدويًا أو دخل بطريقة لسه مالهاش ملف بيانات)، بننشئله ملف افتراضي -
+  /// مطابقة لمنطق fetchUserData في App.tsx بنسخة الويب
+  Future<AppUser> ensureUserDoc(User fbUser) async {
+    final existing = await getUser(fbUser.uid);
+    if (existing != null) return existing;
+    final emailLower = (fbUser.email ?? '').toLowerCase();
+    final isAdmin = _adminEmails.contains(emailLower);
+    final defaultUser = AppUser(
+      id: fbUser.uid,
+      email: fbUser.email ?? '',
+      name: isAdmin ? 'مدير المنظومة' : (fbUser.displayName ?? 'مستخدم'),
+      phone: '01000000000',
+      role: isAdmin ? UserRole.ADMIN : UserRole.CUSTOMER,
+      status: UserStatus.APPROVED,
+      zoneId: 'أشمون',
+      wallet: const Wallet(balance: 1000),
+    );
+    await createUserDoc(fbUser.uid, defaultUser);
+    return defaultUser;
   }
 
   Future<void> updatePhotoUrl(String uid, String url) {
@@ -117,6 +174,45 @@ class FirebaseService {
       'center': villages.isNotEmpty ? villages.first['center'] : {'lat': 0, 'lng': 0},
       'villages': villages,
     }, SetOptions(merge: true));
+  }
+
+  /// إضافة قرية جديدة لمركز معيّن - مقابلة لـ handleAddVillage في
+  /// AdminGeographyManager.tsx بنسخة الويب
+  Future<void> addVillageToZone(String districtId, Village village) {
+    return db.collection('zones').doc(districtId).update({
+      'villages': FieldValue.arrayUnion([
+        {
+          'id': village.id,
+          'name': village.name,
+          'center': village.center.toMap(),
+        }
+      ]),
+    });
+  }
+
+  Future<void> removeVillageFromZone(String districtId, Zone zone, Village village) {
+    final updated = zone.villages.where((v) => v.id != village.id).map((v) => {
+          'id': v.id,
+          'name': v.name,
+          'center': v.center.toMap(),
+        }).toList();
+    return db.collection('zones').doc(districtId).update({'villages': updated});
+  }
+
+  /// تعديل إحداثيات قرية موجودة - مقابلة لـ handleUpdateCoords بنسخة الويب
+  Future<void> updateVillageCoords(
+      String districtId, Zone zone, String villageId, double lat, double lng) {
+    final updated = zone.villages.map((v) {
+      if (v.id != villageId) {
+        return {'id': v.id, 'name': v.name, 'center': v.center.toMap()};
+      }
+      return {
+        'id': v.id,
+        'name': v.name,
+        'center': {'lat': lat, 'lng': lng},
+      };
+    }).toList();
+    return db.collection('zones').doc(districtId).update({'villages': updated});
   }
 
   // ---------- Driver / Courier ----------
@@ -265,6 +361,38 @@ class FirebaseService {
     return db.collection('users').doc(userId).update({'role': enumToStr(role)});
   }
 
+  Future<void> deleteUser(String userId) => db.collection('users').doc(userId).delete();
+
+  /// تعديل شامل لبيانات عضو - مقابلة لصفحة AdminEditUser.tsx بنسخة الويب
+  /// (ملحوظة أمان: منعمل تحديث لكلمة المرور من هنا كنص مباشر في Firestore
+  /// تجنبًا لتخزينها بشكل غير آمن؛ تغيير الباسورد لازم يتم عبر Firebase Auth
+  /// من حساب المستخدم نفسه أو بإعادة تعيين رسمية)
+  Future<void> updateUserFull({
+    required String userId,
+    required String name,
+    required String phone,
+    required String email,
+    required UserRole role,
+    required UserStatus status,
+    VehicleType? vehicleType,
+    double? walletBalance,
+  }) {
+    final data = <String, dynamic>{
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'role': enumToStr(role),
+      'status': enumToStr(status),
+    };
+    if (role == UserRole.DRIVER) {
+      data['vehicleType'] = enumToStr(vehicleType ?? VehicleType.TOKTOK);
+    }
+    if (walletBalance != null) {
+      data['wallet.balance'] = walletBalance;
+    }
+    return db.collection('users').doc(userId).update(data);
+  }
+
   /// كل المطاعم (مفتوحة ومغلقة) - لإدارة السوبر أدمن
   Stream<List<Restaurant>> allRestaurantsStream() {
     return db
@@ -273,16 +401,32 @@ class FirebaseService {
         .map((s) => s.docs.map((d) => Restaurant.fromMap(d.id, d.data())).toList());
   }
 
-  Future<void> createRestaurant(String name, String category) {
+  Future<void> createRestaurant(
+      String name, String category, String address, double lat, double lng) {
     final id = 'rest_${DateTime.now().millisecondsSinceEpoch}';
     return db.collection('restaurants').doc(id).set({
       'name': name,
       'category': category,
-      'address': 'أشمون',
-      'lat': 30.298,
-      'lng': 30.975,
+      'address': address,
+      'lat': lat,
+      'lng': lng,
       'menu': [],
       'isOpen': true,
+    });
+  }
+
+  Future<void> updateRestaurant(String id,
+      {required String name,
+      required String category,
+      required String address,
+      required double lat,
+      required double lng}) {
+    return db.collection('restaurants').doc(id).update({
+      'name': name,
+      'category': category,
+      'address': address,
+      'lat': lat,
+      'lng': lng,
     });
   }
 
@@ -363,27 +507,51 @@ class FirebaseService {
 
   // ---------- Notifications ----------
 
-  Stream<List<Map<String, dynamic>>> notificationsStream(String userId) {
+  /// إشعارات المستخدم: الموجهة له شخصيًا + الإشعارات العامة (ALL) + إشعارات
+  /// خاصة برتبته (مثلاً كل الكباتن) - مطابقة لاستعلام NotificationsView.tsx
+  Stream<List<Map<String, dynamic>>> notificationsStream(String userId, {UserRole? role}) {
+    final targets = [userId, 'ALL', if (role != null) enumToStr(role)];
     return db
         .collection('notifications')
-        .where('userId', isEqualTo: userId)
+        .where('userId', whereIn: targets)
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
         .map((s) => s.docs.map((d) => {'id': d.id, ...d.data()}).toList());
   }
 
+  /// تعليم كل إشعارات المستخدم كمقروءة دفعة واحدة
+  Future<void> markAllNotificationsRead(List<String> ids) async {
+    final batch = db.batch();
+    for (final id in ids) {
+      batch.update(db.collection('notifications').doc(id), {'read': true});
+    }
+    await batch.commit();
+  }
+
   Future<void> markNotificationRead(String id) {
     return db.collection('notifications').doc(id).update({'read': true});
   }
 
-  Stream<int> unreadNotificationsCount(String userId) {
-    return db
-        .collection('notifications')
-        .where('userId', isEqualTo: userId)
-        .where('read', isEqualTo: false)
-        .snapshots()
-        .map((s) => s.docs.length);
+  /// إرسال تقييم/ملاحظة من المستخدم - مقابلة لملف SupportView.tsx بنسخة الويب
+  Future<void> submitFeedback({
+    required AppUser user,
+    required int rating,
+    required String opinion,
+  }) {
+    return db.collection('feedback').add({
+      'userId': user.id,
+      'userName': user.name,
+      'userPhone': user.phone,
+      'rating': rating,
+      'opinion': opinion,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Stream<int> unreadNotificationsCount(String userId, {UserRole? role}) {
+    return notificationsStream(userId, role: role)
+        .map((list) => list.where((n) => n['read'] != true).length);
   }
 
   /// حفظ توكن FCM الخاص بالجهاز على مستند المستخدم عشان الإشعارات توصله
@@ -466,5 +634,87 @@ class FirebaseService {
 
   Future<void> rejectWithdrawal(String withdrawalId) {
     return db.collection('withdrawals').doc(withdrawalId).update({'status': 'REJECTED'});
+  }
+
+  // ---------- Ads (بانرات الرئيسية) ----------
+  // مقابلة لمنطق AdsSlider في CustomerDashboard.tsx بنسخة الويب
+
+  Stream<List<Ad>> activeAdsStream() {
+    return db
+        .collection('ads')
+        .orderBy('displayOrder')
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) => Ad.fromMap(d.id, d.data()))
+            .where((a) => a.isActive)
+            .toList());
+  }
+
+  /// كل الإعلانات (فعّالة وغير فعّالة) - لاستخدام لوحة إدارة الإعلانات
+  Stream<List<Ad>> allAdsStream() {
+    return db.collection('ads').snapshots().map(
+        (s) => s.docs.map((d) => Ad.fromMap(d.id, d.data())).toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
+  }
+
+  Future<void> saveAd(Ad ad) {
+    return db.collection('ads').doc(ad.id).set({
+      'title': ad.title,
+      'description': ad.description,
+      'imageUrl': ad.imageUrl,
+      'ctaText': ad.ctaText,
+      'type': enumToStr(ad.type),
+      if (ad.targetId != null) 'targetId': ad.targetId,
+      if (ad.whatsappNumber != null) 'whatsappNumber': ad.whatsappNumber,
+      'isActive': ad.isActive,
+      'displayOrder': ad.displayOrder,
+      'views': ad.views,
+      'clicks': ad.clicks,
+      'createdAt': ad.createdAt,
+    });
+  }
+
+  Future<void> deleteAd(String adId) => db.collection('ads').doc(adId).delete();
+
+  Future<void> toggleAdActive(String adId, bool isActive) {
+    return db.collection('ads').doc(adId).update({'isActive': isActive});
+  }
+
+  Future<void> incrementAdClicks(String adId) {
+    return db.collection('ads').doc(adId).update({'clicks': FieldValue.increment(1)});
+  }
+
+  // ---------- Customer Wallet (شحن/سحب المحفظة الرقمية) ----------
+  // مقابلة لملف WalletView.tsx بنسخة الويب
+
+  /// سجل المعاملات المالية للمستخدم (شحن ودفع بالرصيد)، الأحدث أولًا
+  Stream<List<WalletTransaction>> walletTransactionsStream(String userId) {
+    return db
+        .collection('transactions')
+        .where('userId', isEqualTo: userId)
+        .snapshots()
+        .map((s) {
+      final list = s.docs.map((d) => WalletTransaction.fromMap(d.id, d.data())).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// طلب شحن أو سحب من المحفظة الرقمية - بيتحفظ في payment_requests وينتظر
+  /// مراجعة الإدارة (بيتبعت كمان عبر واتساب لتسريع المراجعة، بيتم فتحه من الشاشة)
+  Future<void> createPaymentRequest({
+    required AppUser user,
+    required PaymentRequestAction action,
+    required double amount,
+  }) {
+    return db.collection('payment_requests').add({
+      'userId': user.id,
+      'userName': user.name,
+      'userPhone': user.phone,
+      'type': enumToStr(action),
+      'amount': amount,
+      'status': 'PENDING',
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+    });
   }
 }

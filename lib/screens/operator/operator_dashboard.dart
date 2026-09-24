@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../models/models.dart';
+import '../../data/menofia_data.dart';
 import '../../services/firebase_service.dart';
 import '../../theme/app_theme.dart';
+import '../notifications_screen.dart';
 
 class OperatorDashboard extends StatefulWidget {
   final AppUser user;
@@ -19,7 +21,10 @@ class _OperatorDashboardState extends State<OperatorDashboard> {
   Widget build(BuildContext context) {
     final tabs = const ['النشاط الحالي', 'الكباتن', 'السجل العام'];
     return Scaffold(
-      appBar: AppBar(title: const Text('تحكم أشمون')),
+      appBar: AppBar(
+        title: const Text('تحكم أشمون'),
+        actions: [_NotifBell(user: widget.user)],
+      ),
       body: Column(
         children: [
           Container(
@@ -104,6 +109,31 @@ class _LiveOrderCard extends StatelessWidget {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  Future<void> _shareWhatsApp() async {
+    // مقابلة لدالة handleShareWhatsApp في OperatorDashboard.tsx بنسخة الويب:
+    // بتبعت تفاصيل الطلب لواتساب العميل مباشرة
+    final itemsLine = order.foodItems.isNotEmpty
+        ? '\nالأصناف: ${order.foodItems.map((e) => e.name).join('، ')}'
+        : '';
+    final msg = 'طلب وصلها 🛵\n'
+        'من: ${order.pickup.address}\n'
+        'إلى: ${order.dropoff.address}$itemsLine\n'
+        'السعر: ${order.price.toStringAsFixed(0)} ج.م\n'
+        'الحالة: ${enumToStr(order.status)}';
+    final uri = Uri.parse('https://wa.me/2${order.customerPhone}?text=${Uri.encodeComponent(msg)}');
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  void _openDetails(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      builder: (_) => _OrderDetailsSheet(order: order),
+    );
+  }
+
   Future<void> _cancel(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -140,7 +170,9 @@ class _LiveOrderCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
+          InkWell(
+            onTap: () => _openDetails(context),
+            child: Container(
             color: AppColors.bg,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
@@ -165,6 +197,7 @@ class _LiveOrderCard extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
               ],
             ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(16),
@@ -181,6 +214,21 @@ class _LiveOrderCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (order.foodItems.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.restaurant_menu, size: 16, color: Colors.black38),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(order.foodItems.map((e) => e.name).join('، '),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black54)),
+                      ),
+                    ],
+                  ),
+                ],
                 if (order.notes != null && order.notes!.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Container(
@@ -209,6 +257,12 @@ class _LiveOrderCard extends StatelessWidget {
                               style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade700),
                               child: const Text('توجيه كابتن فورًا'),
                             ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _shareWhatsApp,
+                      icon: const Icon(Icons.share, color: Color(0xFF25D366)),
+                      style: IconButton.styleFrom(backgroundColor: const Color(0xFF25D366).withOpacity(0.08)),
                     ),
                     const SizedBox(width: 8),
                     IconButton(
@@ -411,13 +465,34 @@ class _HistoryTab extends StatelessWidget {
             .where((o) => o.status == OrderStatus.DELIVERED || o.status == OrderStatus.CANCELLED)
             .toList();
         if (done.isEmpty) return const Center(child: Text('مفيش طلبات في السجل لسه'));
+        final delivered = done.where((o) => o.status != OrderStatus.CANCELLED).toList();
+        final cancelled = done.where((o) => o.status == OrderStatus.CANCELLED).toList();
+        final totalRevenue = delivered.fold<double>(0, (sum, o) => sum + o.price);
         return ListView.separated(
           padding: const EdgeInsets.all(14),
-          itemCount: done.length,
+          itemCount: done.length + 1,
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, i) {
-            final o = done[i];
+            if (i == 0) {
+              return Row(
+                children: [
+                  Expanded(child: _StatChip(label: 'تم التوصيل', value: '${delivered.length}', color: AppColors.primary)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _StatChip(label: 'إجمالي الإيراد', value: '${totalRevenue.toStringAsFixed(0)} ج.م', color: Colors.black87)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _StatChip(label: 'ملغي', value: '${cancelled.length}', color: Colors.red)),
+                ],
+              );
+            }
+            final o = done[i - 1];
             return ListTile(
+              onTap: () => showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+                builder: (_) => _OrderDetailsSheet(order: o),
+              ),
               tileColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               leading: Icon(
@@ -430,6 +505,159 @@ class _HistoryTab extends StatelessWidget {
               trailing: Text('${o.price.toStringAsFixed(0)} ج.م'),
             );
           },
+        );
+      },
+    );
+  }
+}
+
+/// شيت تفاصيل الطلب الكاملة - مقابلة لمكوّن OrderDetailsModal في نسخة الويب
+class _StatChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _StatChip({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: color)),
+          const SizedBox(height: 4),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.black45)),
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderDetailsSheet extends StatelessWidget {
+  final Order order;
+  const _OrderDetailsSheet({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final district = districtNameByVillageName(order.pickup.villageName ?? order.dropoff.villageName);
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      maxChildSize: 0.9,
+      minChildSize: 0.4,
+      expand: false,
+      builder: (context, scrollCtrl) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: ListView(
+            controller: scrollCtrl,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.bolt, color: Colors.white),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text('تفاصيل الرحلة', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                  ),
+                  Text('محافظة المنوفية • $district',
+                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.black38)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _detailRow('حالة الطلب', enumToStr(order.status)),
+              _detailRow('من', order.pickup.address),
+              _detailRow('إلى', order.dropoff.address),
+              _detailRow('السعر', '${order.price.toStringAsFixed(0)} ج.م'),
+              _detailRow('طريقة الدفع', enumToStr(order.paymentMethod)),
+              _detailRow('نوع المركبة المطلوبة', enumToStr(order.requestedVehicleType)),
+              if (order.driverName != null) _detailRow('الكابتن', order.driverName!),
+              if (order.notes != null && order.notes!.isNotEmpty) _detailRow('ملاحظات', order.notes!),
+              if (order.foodItems.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('الأصناف المطلوبة', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13)),
+                const SizedBox(height: 8),
+                ...order.foodItems.map((it) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${it.name} × ${it.quantity}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                          Text('${(it.price * it.quantity).toStringAsFixed(0)} ج.م', style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                        ],
+                      ),
+                    )),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.black45)),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.left,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// جرس الإشعارات في شريط العنوان - متاح لكل الأدوار (مشغّل، سوبر أدمن)
+class _NotifBell extends StatelessWidget {
+  final AppUser user;
+  const _NotifBell({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: FirebaseService.instance.unreadNotificationsCount(user.id, role: user.role),
+      builder: (context, snap) {
+        final count = snap.data ?? 0;
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_none),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => NotificationsScreen(userId: user.id, role: user.role)),
+              ),
+            ),
+            if (count > 0)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  child: Text('$count',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w900)),
+                ),
+              ),
+          ],
         );
       },
     );

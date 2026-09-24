@@ -117,3 +117,13 @@ const List<DistrictData> menofiaDistricts = [
     VillageData(id: 'v-el-atf', name: 'العطف', lat: 30.6400, lng: 30.7700),
   ]),
 ];
+
+/// اسم المركز اللي بتتبعله قرية معينة (بالاسم) - مقابلة لـ getDistrictName
+/// المستخدمة في لوحتي المشغّل والسائق بنسخة الويب
+String districtNameByVillageName(String? villageName) {
+  if (villageName == null || villageName.isEmpty) return 'المنوفية';
+  for (final d in menofiaDistricts) {
+    if (d.villages.any((v) => v.name == villageName)) return d.name;
+  }
+  return 'المنوفية';
+}

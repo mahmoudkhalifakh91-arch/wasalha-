@@ -18,7 +18,7 @@ class _RestaurantsListScreenState extends State<RestaurantsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('مطاعم أشمون')),
+      appBar: AppBar(title: const Text('مطاعم المنوفية')),
       body: StreamBuilder<List<Restaurant>>(
         stream: FirebaseService.instance.restaurantsStream(),
         builder: (context, snap) {
@@ -73,44 +73,66 @@ class _RestaurantTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
         borderRadius: BorderRadius.circular(24),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-              builder: (_) => RestaurantMenuScreen(restaurant: restaurant, user: user)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(18),
+        onTap: !restaurant.isOpen
+            ? () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('المطعم مغلق حاليًا، جرب مطعم تاني')))
+            : () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => RestaurantMenuScreen(restaurant: restaurant, user: user)),
                 ),
-                child: const Icon(Icons.restaurant, color: AppColors.primary, size: 30),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(restaurant.name,
-                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
-                    const SizedBox(height: 4),
-                    Text(restaurant.category,
-                        style: const TextStyle(color: AppColors.primary, fontSize: 12)),
-                    if (restaurant.promoText != null) ...[
+        child: Opacity(
+          opacity: restaurant.isOpen ? 1 : 0.5,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: const Icon(Icons.restaurant, color: AppColors.primary, size: 30),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(restaurant.name,
+                                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                          ),
+                          if (!restaurant.isOpen) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                              child: const Text('مغلق الآن',
+                                  style: TextStyle(color: Colors.red, fontSize: 9, fontWeight: FontWeight.w900)),
+                            ),
+                          ],
+                        ],
+                      ),
                       const SizedBox(height: 4),
-                      Text(restaurant.promoText!,
-                          style: const TextStyle(color: Colors.amber, fontSize: 11)),
+                      Text(restaurant.category,
+                          style: const TextStyle(color: AppColors.primary, fontSize: 12)),
+                      if (restaurant.promoText != null) ...[
+                        const SizedBox(height: 4),
+                        Text(restaurant.promoText!,
+                            style: const TextStyle(color: Colors.amber, fontSize: 11)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const Icon(Icons.chevron_left, color: Colors.grey),
-            ],
+                const Icon(Icons.chevron_left, color: Colors.grey),
+              ],
+            ),
           ),
         ),
       ),

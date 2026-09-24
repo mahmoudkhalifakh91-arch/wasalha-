@@ -7,6 +7,8 @@ import '../chat_screen.dart';
 import '../notifications_screen.dart';
 import '../../services/push_service.dart';
 import '../../widgets/profile_avatar.dart';
+import '../support_screen.dart';
+import 'order_route_map.dart';
 
 class DriverDashboard extends StatefulWidget {
   final AppUser user;
@@ -44,7 +46,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
         title: const Text('لوحة الكابتن'),
         actions: [
           StreamBuilder<int>(
-            stream: FirebaseService.instance.unreadNotificationsCount(widget.user.id),
+            stream: FirebaseService.instance.unreadNotificationsCount(widget.user.id, role: widget.user.role),
             builder: (context, snap) {
               final count = snap.data ?? 0;
               return Stack(
@@ -55,7 +57,7 @@ class _DriverDashboardState extends State<DriverDashboard> {
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => NotificationsScreen(userId: widget.user.id)),
+                          builder: (_) => NotificationsScreen(userId: widget.user.id, role: widget.user.role)),
                     ),
                   ),
                   if (count > 0)
@@ -312,6 +314,16 @@ class _ActiveOrderPanelState extends State<_ActiveOrderPanel> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  Future<void> _openNavigation() async {
+    // بنفتح تطبيق خرائط خارجي (Google Maps) للملاحة لحد نقطة الاستلام أو
+    // التسليم حسب حالة الطلب الحالية - مقابلة عملية لخريطة الملاحة الحية بالويب
+    final o = widget.order;
+    final target = o.status == OrderStatus.ASSIGNED ? o.pickup : o.dropoff;
+    final uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${target.lat},${target.lng}&travelmode=driving');
+    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final o = widget.order;
@@ -336,7 +348,24 @@ class _ActiveOrderPanelState extends State<_ActiveOrderPanel> {
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 26)),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            OrderRouteMap(order: o),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openNavigation,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primaryDark,
+                  side: const BorderSide(color: AppColors.primary),
+                ),
+                icon: const Icon(Icons.navigation_outlined),
+                label: Text(o.status == OrderStatus.ASSIGNED
+                    ? 'ابدأ الملاحة لنقطة الاستلام'
+                    : 'ابدأ الملاحة لنقطة التسليم'),
+              ),
+            ),
+            const SizedBox(height: 12),
             Text('${o.pickup.address} ← ${o.dropoff.address}',
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
             if (o.notes != null && o.notes!.isNotEmpty) ...[
@@ -696,6 +725,18 @@ class _DriverProfileTab extends StatelessWidget {
             leading: const Icon(Icons.badge_outlined),
             title: const Text('رقم اللوحة'),
             trailing: Text(user.plateNumber ?? '-'),
+          ),
+        ),
+        Card(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: ListTile(
+            leading: const Icon(Icons.support_agent_outlined),
+            title: const Text('الدعم والملاحظات'),
+            trailing: const Icon(Icons.chevron_left),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => SupportScreen(user: user)),
+            ),
           ),
         ),
         const SizedBox(height: 20),

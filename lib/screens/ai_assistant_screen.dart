@@ -18,7 +18,7 @@ class _Msg {
 class _AiAssistantScreenState extends State<AiAssistantScreen> {
   final List<_Msg> messages = [
     const _Msg(false,
-        'يا أهلاً بيك في أشمون! أنا مساعدك الذكي، أقدر أساعدك تعرف أسعار المشاوير، ترشيحات مطاعم، أو أماكن في أشمون. تحب تسأل عن إيه؟'),
+        'يا أهلاً بيك في وصـــلــهــا! أنا مساعدك الذكي لخدمات المنوفية بالكامل، أقدر أساعدك تعرف أسعار المشاوير، ترشيحات مطاعم، أو أماكن في أي مركز. تحب تسأل عن إيه؟'),
   ];
   final inputCtrl = TextEditingController();
   final scrollCtrl = ScrollController();
@@ -145,7 +145,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
                     child: TextField(
                       controller: inputCtrl,
                       decoration: InputDecoration(
-                        hintText: 'اسأل أي سؤال عن أشمون...',
+                        hintText: 'اسأل أي سؤال عن المنوفية...',
                         filled: true,
                         fillColor: AppColors.bg,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),

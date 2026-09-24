@@ -95,6 +95,11 @@ class _NewQuickOrderScreenState extends State<NewQuickOrderScreen> {
           .showSnackBar(const SnackBar(content: Text('من فضلك املأ كل الحقول')));
       return;
     }
+    if (payment == PaymentMethod.WALLET && widget.user.wallet.balance < copy.deliveryFee) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('رصيد محفظتك غير كافٍ لإتمام هذا الطلب، اختر الدفع كاش أو اشحن رصيدك')));
+      return;
+    }
     setState(() => loading = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;

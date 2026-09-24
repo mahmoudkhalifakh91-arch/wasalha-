@@ -54,7 +54,22 @@ class AuthGate extends StatelessWidget {
             }
             final user = userSnap.data;
             if (user == null) {
-              return const _SplashLoader(message: 'جاري تجهيز حسابك...');
+              if (FirebaseService.instance.isCreatingUserProfile) {
+                // شاشة تسجيل الدخول لسه بتجهّز ملف المستخدم بنفسها (مثلاً خطوة
+                // إكمال البيانات بعد جوجل) - منستناها من غير ما نتدخل
+                return const _SplashLoader();
+              }
+              // مفيش ملف بيانات لسه لهذا الحساب - ننشئه تلقائيًا (نفس سلوك نسخة الويب)
+              return FutureBuilder<AppUser>(
+                future: FirebaseService.instance.ensureUserDoc(authUser),
+                builder: (context, snap) {
+                  if (!snap.hasData) {
+                    return const _SplashLoader(message: 'جاري تجهيز حسابك...');
+                  }
+                  // بعد الإنشاء، الـ StreamBuilder هيلتقط المستند الجديد تلقائيًا
+                  return const _SplashLoader(message: 'جاري تجهيز حسابك...');
+                },
+              );
             }
             if (user.role == UserRole.DRIVER &&
                 user.status == UserStatus.PENDING_APPROVAL) {

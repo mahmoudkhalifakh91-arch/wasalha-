@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../../../models/models.dart';
 import '../../../services/firebase_service.dart';
@@ -25,7 +27,38 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
   PaymentMethod payment = PaymentMethod.CASH;
   bool loading = false;
 
-  static const deliveryFee = 12.0;
+  // نفس منطق تسعير توصيل الأكل بالويب: سعر ثابت لو جوه نفس القرية، وإلا
+  // مسافة × سعر الكيلومتر بحد أدنى معيّن (constants.ts → DEFAULT_PRICING)
+  static const double _sameVillagePrice = 15;
+  static const double _perKmPrice = 3;
+  static const double _minPrice = 20;
+
+  double get _dropLat => dropoffMapLocation?.lat ?? dropoffVillage?.lat ?? 0;
+  double get _dropLng => dropoffMapLocation?.lng ?? dropoffVillage?.lng ?? 0;
+
+  double get _distanceKm {
+    if (_dropLat == 0 && _dropLng == 0) return 0;
+    const r = 6371.0;
+    final dLat = _deg2rad(_dropLat - widget.restaurant.lat);
+    final dLng = _deg2rad(_dropLng - widget.restaurant.lng);
+    final a = (sin(dLat / 2) * sin(dLat / 2)) +
+        cos(_deg2rad(widget.restaurant.lat)) *
+            cos(_deg2rad(_dropLat)) *
+            sin(dLng / 2) *
+            sin(dLng / 2);
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return r * c;
+  }
+
+  double _deg2rad(double deg) => deg * (pi / 180);
+
+  double get deliveryFee {
+    final isSameVillage = dropoffVillage != null && dropoffVillage!.name == widget.restaurant.address;
+    if (isSameVillage) return _sameVillagePrice;
+    if (_dropLat == 0 && _dropLng == 0) return _minPrice; // لسه محددش موقع
+    final calc = (_distanceKm * _perKmPrice).roundToDouble();
+    return calc < _minPrice ? _minPrice : calc;
+  }
 
   Future<void> _pickDropoffVillage() async {
     final v = await pickVillage(context);
@@ -58,6 +91,11 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
           .showSnackBar(const SnackBar(content: Text('من فضلك اكتب عنوان التوصيل')));
       return;
     }
+    if (payment == PaymentMethod.WALLET && widget.user.wallet.balance < total) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('رصيد محفظتك غير كافٍ لإتمام هذا الطلب، اختر الدفع كاش أو اشحن رصيدك')));
+      return;
+    }
     setState(() => loading = true);
     try {
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -83,7 +121,7 @@ class _FoodCheckoutScreenState extends State<FoodCheckoutScreen> {
         ],
         updatedAt: now,
         price: total,
-        distance: 3,
+        distance: _dropLat == 0 ? 3 : _distanceKm,
         commission: total * 0.15,
         createdAt: now,
         notes: notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim(),
