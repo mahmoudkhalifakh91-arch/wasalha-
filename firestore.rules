@@ -23,7 +23,7 @@ service cloud.firestore {
         request.auth.token.email in [
           'admin@ashmoun.com',
           'mahmoudkhalifa.kh91@gmail.com',
-          'sadat.planning.officer@dakahlia.net',
+          'superadmin@ashmoun.com',
           'admin@wasalah.com',
           'wasalah.app@gmail.com'
         ]
