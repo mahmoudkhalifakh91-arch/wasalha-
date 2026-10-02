@@ -20,7 +20,7 @@ class WasalhaMap extends StatefulWidget {
     this.markers = const [],
     this.routeGeometry = const [],
     this.fitPoints,
-    this.showControls = true,
+    this.showControls = false, // أزرار التكبير: اختيارية ومقفولة افتراضياً
   });
 
   @override
@@ -58,7 +58,7 @@ class _WasalhaMapState extends State<WasalhaMap> {
       _controller.fitCamera(
         CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(pts),
-          padding: const EdgeInsets.fromLTRB(56, 96, 56, 56),
+          padding: const EdgeInsets.all(50),
           maxZoom: 17,
         ),
       );
@@ -127,10 +127,8 @@ class _WasalhaMapState extends State<WasalhaMap> {
               PolylineLayer(polylines: [
                 Polyline(
                   points: widget.routeGeometry,
-                  color: C.emerald600,
-                  strokeWidth: 5,
-                  borderColor: C.white,
-                  borderStrokeWidth: 2,
+                  color: C.emerald500.withOpacity(0.6),
+                  strokeWidth: 6,
                 ),
               ]),
             MarkerLayer(markers: widget.markers, rotate: false),

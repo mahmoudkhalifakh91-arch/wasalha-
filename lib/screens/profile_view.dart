@@ -222,7 +222,7 @@ class _ProfileViewState extends State<ProfileView> {
                                 ? Image.memory(
                                     base64Decode(photo.split(',').last),
                                     fit: BoxFit.cover)
-                                : Image.network(photo, fit: BoxFit.cover),
+                                : SmartImage(photo, fit: BoxFit.cover),
                           )
                         else
                           Center(

@@ -957,7 +957,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                     border: Border.all(color: C.slate200.withOpacity(0.5)),
                   ),
                   child: rest.photoURL != null
-                      ? Image.network(rest.photoURL!, fit: BoxFit.cover)
+                      ? SmartImage(rest.photoURL, fit: BoxFit.cover)
                       : const Icon(LucideIcons.utensils,
                           size: 24, color: C.emerald600),
                 ),
@@ -1224,166 +1224,93 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
 
   Future<void> _cancelPendingOrder(Order order) async {
     try {
-      await order_service.updateOrderStatus(
-          order.id, OrderStatus.cancelled, user.id, user.role);
+      await db
+          .collection('orders')
+          .doc(order.id)
+          .update({'status': OrderStatus.cancelled.value});
     } catch (_) {
       if (mounted) showAppAlert(context, 'تعذر إلغاء الطلب');
     }
   }
 
-  Widget _offerCard(Offer offer, {required bool cheapest, required Order order}) {
-    final busy = _acceptingOfferId == offer.id;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: C.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-            color: cheapest ? C.emerald500 : C.slate100,
-            width: cheapest ? 2 : 1),
-        boxShadow: Sh.xl(color: C.emerald900.withOpacity(0.05)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (cheapest)
-            Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                    color: C.emerald50,
-                    borderRadius: BorderRadius.circular(999)),
-                child: Text('الأقل سعراً',
-                    style: T.s(10, T.w900, C.emerald600)),
-              ),
+  Widget _waitingForOffersView(Order order) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(48),
+          decoration: BoxDecoration(
+            color: C.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: C.emerald50, width: 4),
+            boxShadow: Sh.xxl(color: C.emerald900.withOpacity(0.1)),
+          ),
+          child: Pulse(
+              child: const Icon(LucideIcons.radar, size: 80, color: C.emerald600)),
+        ),
+        const SizedBox(height: 24),
+        Text('جاري البحث عن كباتن متاحين...',
+            textAlign: TextAlign.center,
+            style: T.s(24, T.w900, C.slate900, letterSpacing: -0.6)),
+        const SizedBox(height: 4),
+        Text('ستظهر العروض في الأسفل خلال لحظات',
+            style: T.s(11, T.w700, C.slate400)),
+        const SizedBox(height: 24),
+        for (final offer in _sortedOffers)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: C.white,
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: C.emerald50, width: 2),
+              boxShadow: Sh.xl(color: C.emerald900.withOpacity(0.06)),
             ),
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                    color: C.slate50, borderRadius: BorderRadius.circular(16)),
-                child: offer.driverPhoto != null
-                    ? Image.network(offer.driverPhoto!,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
-                            LucideIcons.user, color: C.slate400))
-                    : const Icon(LucideIcons.user, color: C.slate400),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                PressScale(
+                  onTap: _acceptingOfferId != null ? null : () => _acceptOfferTapped(offer),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: C.emerald600,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: Sh.lg(),
+                    ),
+                    child: _acceptingOfferId == offer.id
+                        ? const Spinner()
+                        : Text('قبول ${offer.price.toInt()} ج.م',
+                            style: T.s(11, T.w900, C.white)),
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(offer.driverName,
-                        style: T.s(14, T.w900, C.slate900)),
-                    const SizedBox(height: 2),
+                    Text(offer.driverName, style: T.s(14, T.w900, C.slate900)),
+                    const SizedBox(height: 4),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(LucideIcons.star,
-                            size: 12, color: C.amber400),
-                        const SizedBox(width: 3),
-                        Text(
-                            offer.driverRating > 0
+                        Text(offer.driverRating > 0
                                 ? offer.driverRating.toStringAsFixed(1)
                                 : '5.0',
-                            style: T.s(11, T.w900, C.amber500)),
-                        const SizedBox(width: 8),
-                        Text(offer.vehicleType.value,
-                            style: T.s(10, T.w700, C.slate400)),
+                            style: T.s(10, T.w900, C.amber500)),
+                        const SizedBox(width: 2),
+                        const Icon(LucideIcons.star,
+                            size: 12, color: C.amber400),
                       ],
                     ),
                   ],
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${offer.price.toInt()}',
-                      style: T.s(26, T.w900, C.slate950)),
-                  Text('ج.م', style: T.s(10, T.w700, C.slate400)),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          PressScale(
-            onTap: _acceptingOfferId != null ? null : () => _acceptOfferTapped(offer),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: C.emerald600,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: Sh.lg(),
-              ),
-              child: busy
-                  ? const Spinner()
-                  : Text('قبول هذا السعر (${offer.price.toInt()} ج.م)',
-                      style: T.s(13, T.w900, C.white)),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _waitingForOffersView(Order order) {
-    final offers = _sortedOffers;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: C.white,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: C.emerald50, width: 3),
-            boxShadow: Sh.xl(color: C.emerald900.withOpacity(0.08)),
-          ),
-          child: Column(
-            children: [
-              Pulse(
-                  child: const Icon(LucideIcons.radar,
-                      size: 56, color: C.emerald600)),
-              const SizedBox(height: 12),
-              Text(
-                  offers.isEmpty
-                      ? 'جاري إرسال طلبك للكباتن...'
-                      : 'وصلك ${offers.length} عرض — اختار السعر المناسب',
-                  textAlign: TextAlign.center,
-                  style: T.s(18, T.w900, C.slate900)),
-              const SizedBox(height: 6),
-              Text('سعرك المقترح: ${order.price.toInt()} ج.م',
-                  style: T.s(12, T.w700, C.slate500)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 20),
-        if (offers.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('هتظهر العروض هنا أول ما الكباتن يردوا — هيجيلك إشعار.',
-                textAlign: TextAlign.center,
-                style: T.s(12, T.w500, C.slate400)),
-          ),
-        for (var i = 0; i < offers.length; i++)
-          _offerCard(offers[i], cheapest: i == 0 && offers.length > 1, order: order),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         GestureDetector(
           onTap: () => _cancelPendingOrder(order),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text('إلغاء الطلب',
-                textAlign: TextAlign.center,
-                style: T.s(12, T.w900, C.rose500, letterSpacing: 1.2)),
-          ),
+          child: Text('إلغاء الطلب',
+              style: T.s(11, T.w900, C.rose500, letterSpacing: 1.2)),
         ),
       ],
     );
@@ -1495,10 +1422,10 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
       children: [
         if (_driverLoc != null) ...[
           Container(
-            height: MediaQuery.of(context).size.height * 0.42,
+            height: MediaQuery.of(context).size.height * 0.45,
             clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(72),
               border: Border.all(color: C.white, width: 4),
               boxShadow: Sh.xxl(),
             ),
@@ -1649,7 +1576,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> {
                 boxShadow: Sh.xxl(),
               ),
               child: order.driverPhoto != null
-                  ? Image.network(order.driverPhoto!, fit: BoxFit.cover)
+                  ? SmartImage(order.driverPhoto, fit: BoxFit.cover)
                   : Center(
                       child: Text(
                           (order.driverName?.isNotEmpty ?? false)
@@ -1835,8 +1762,9 @@ class AdsSlider extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(ad.imageUrl, fit: BoxFit.cover,
-                      opacity: const AlwaysStoppedAnimation(0.8)),
+                  Opacity(
+                      opacity: 0.8,
+                      child: SmartImage(ad.imageUrl, fit: BoxFit.cover)),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -1917,7 +1845,7 @@ class AdDetailsView extends StatelessWidget {
                         children: [
                           AspectRatio(
                             aspectRatio: 21 / 9,
-                            child: Image.network(ad.imageUrl, fit: BoxFit.cover),
+                            child: SmartImage(ad.imageUrl, fit: BoxFit.cover),
                           ),
                           Positioned(
                             top: 24,
@@ -2339,13 +2267,18 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
     }
   }
 
+  // أصناف قديمة ممكن تكون من غير id فكلها كانت بتتحسب كصنف واحد.
+  String _keyOf(MenuItem item) =>
+      item.id.isNotEmpty ? item.id : '${item.name}_${item.price}';
+
   void _addToCart(MenuItem item) {
+    final key = _keyOf(item);
     setState(() {
-      final i = _cart.indexWhere((e) => e.id == item.id);
+      final i = _cart.indexWhere((e) => e.id == key);
       if (i >= 0) {
         _cart[i] = _cart[i].copyWith(quantity: _cart[i].quantity + 1);
       } else {
-        _cart.add(CartItem(id: item.id, name: item.name, price: item.price, quantity: 1));
+        _cart.add(CartItem(id: key, name: item.name, price: item.price, quantity: 1));
       }
     });
   }
@@ -2384,7 +2317,7 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Material(
+      child: _withMenuViewer(Material(
         color: C.white,
         child: Column(
           children: [
@@ -2394,10 +2327,10 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(
-                    widget.restaurant.photoURL ??
-                        'https://images.unsplash.com/photo-1517248135467-4c7ed9d42339',
+                  SmartImage(
+                    widget.restaurant.photoURL,
                     fit: BoxFit.cover,
+                    placeholder: Container(color: C.slate900),
                   ),
                   const DecoratedBox(
                     decoration: BoxDecoration(
@@ -2700,7 +2633,60 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
             ),
           ],
         ),
-      ),
+      )),
+    );
+  }
+
+  List<String> get _menuImages {
+    final r = widget.restaurant;
+    final list = <String>[
+      ...?r.menuImageURLs,
+      if (r.menuImageURL != null && r.menuImageURL!.isNotEmpty) r.menuImageURL!,
+    ].where((e) => e.trim().isNotEmpty).toList();
+    return list.toSet().toList();
+  }
+
+  Widget _withMenuViewer(Widget body) {
+    return Stack(
+      children: [
+        body,
+        if (_showFullMenuImage)
+          Positioned.fill(
+            child: Material(
+              color: const Color(0xF2000000),
+              child: Stack(
+                children: [
+                  PageView(
+                    children: [
+                      for (final img in _menuImages)
+                        InteractiveViewer(
+                          minScale: 1,
+                          maxScale: 5,
+                          child: Center(child: SmartImage(img, fit: BoxFit.contain)),
+                        ),
+                    ],
+                  ),
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 12,
+                    right: 16,
+                    child: PressScale(
+                      onTap: () => setState(() => _showFullMenuImage = false),
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                            color: C.white.withOpacity(0.2),
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.close_rounded,
+                            size: 26, color: C.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2741,12 +2727,12 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
   }
 
   Widget _menuItemRow(MenuItem item) {
-    final qty = _cart.firstWhere((e) => e.id == item.id,
+    final qty = _cart.firstWhere((e) => e.id == _keyOf(item),
             orElse: () => const CartItem(id: '', name: '', price: 0, quantity: 0))
         .quantity;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: C.white,
         borderRadius: BorderRadius.circular(44),
@@ -2764,17 +2750,19 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
             child: Row(
               children: [
                 PressScale(
-                  scale: 0.75,
+                  scale: 0.9,
                   onTap: () => _addToCart(item),
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: C.emerald500,
-                      borderRadius: BorderRadius.circular(12),
+                      color: C.emerald600,
+                      borderRadius: BorderRadius.circular(14),
                       boxShadow: Sh.lg(),
                     ),
-                    child: const Icon(LucideIcons.plus,
-                        size: 20, color: C.white),
+                    child: const Icon(Icons.add_rounded,
+                        size: 28, color: C.white),
                   ),
                 ),
                 SizedBox(
@@ -2784,45 +2772,54 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
                       style: T.s(20, T.w900, C.slate800)),
                 ),
                 PressScale(
-                  scale: 0.75,
-                  onTap: () => _removeFromCart(item.id),
+                  scale: 0.9,
+                  onTap: qty > 0 ? () => _removeFromCart(_keyOf(item)) : null,
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: C.rose50,
-                      borderRadius: BorderRadius.circular(12),
+                      color: qty > 0 ? C.rose500 : C.slate200,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(LucideIcons.minus,
-                        size: 20, color: C.rose500),
+                    child: Icon(Icons.remove_rounded,
+                        size: 28, color: qty > 0 ? C.white : C.slate400),
                   ),
                 ),
               ],
             ),
           ),
-          const Spacer(),
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(item.name,
-                      style: T.s(17, T.w900, C.slate900, height: 1.2)),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(item.price.toStringAsFixed(0),
-                          style: T.s(13, T.w900, C.emerald600)),
-                      const SizedBox(width: 4),
-                      Text('ج.م',
-                          style: T.s(10, T.w900,
-                              C.emerald600.withOpacity(0.6))),
+                      Text(item.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: T.s(16, T.w900, C.slate900, height: 1.2)),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(item.price.toStringAsFixed(0),
+                              style: T.s(13, T.w900, C.emerald600)),
+                          const SizedBox(width: 4),
+                          Text('ج.م',
+                              style: T.s(10, T.w900,
+                                  C.emerald600.withOpacity(0.6))),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              Container(
+                ),
+                const SizedBox(width: 12),
+                Container(
                 width: 64,
                 height: 64,
                 clipBehavior: Clip.antiAlias,
@@ -2832,11 +2829,12 @@ class _RestaurantMenuViewState extends State<RestaurantMenuView> {
                   border: Border.all(color: C.slate50),
                 ),
                 child: item.photoURL != null
-                    ? Image.network(item.photoURL!, fit: BoxFit.cover)
+                    ? SmartImage(item.photoURL, fit: BoxFit.cover)
                     : Icon(LucideIcons.utensils,
                         size: 24, color: C.slate200),
               ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

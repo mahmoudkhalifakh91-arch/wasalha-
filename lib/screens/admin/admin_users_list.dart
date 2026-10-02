@@ -351,7 +351,7 @@ class _AdminUsersListState extends State<AdminUsersList> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: u.photoURL != null
-                    ? Image.network(u.photoURL!, fit: BoxFit.cover)
+                    ? SmartImage(u.photoURL, fit: BoxFit.cover)
                     : Center(
                         child: Text(
                             u.name.isNotEmpty ? u.name.substring(0, 1) : 'ع',

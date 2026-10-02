@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -348,4 +350,56 @@ Future<void> showAppAlert(BuildContext context, String message) {
       ),
     ),
   );
+}
+
+
+/// صورة بتدعم الروابط (http) والصور المحفوظة base64 (data:image/...) —
+/// الأدمن بيحفظ صور المطاعم والمنيو كـ base64، و Image.network مش بيعرضها.
+class SmartImage extends StatelessWidget {
+  final String? src;
+  final BoxFit fit;
+  final Widget? placeholder;
+  const SmartImage(this.src,
+      {super.key, this.fit = BoxFit.cover, this.placeholder});
+
+  static final Map<String, Uint8List> _cache = {};
+
+  static Uint8List? _decode(String s) {
+    final hit = _cache[s];
+    if (hit != null) return hit;
+    try {
+      final comma = s.indexOf(',');
+      final raw = comma >= 0 ? s.substring(comma + 1) : s;
+      final bytes = base64Decode(raw.replaceAll(RegExp(r'\s'), ''));
+      if (_cache.length > 40) _cache.remove(_cache.keys.first);
+      return _cache[s] = bytes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = placeholder ??
+        const Center(child: Icon(LucideIcons.image, size: 24, color: C.slate300));
+    final s = src?.trim();
+    if (s == null || s.isEmpty) return fallback;
+    if (s.startsWith('data:')) {
+      final bytes = _decode(s);
+      if (bytes == null) return fallback;
+      return Image.memory(bytes,
+          fit: fit, gaplessPlayback: true, errorBuilder: (_, __, ___) => fallback);
+    }
+    return Image.network(s,
+        fit: fit,
+        gaplessPlayback: true,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (c, child, p) => p == null
+            ? child
+            : const Center(
+                child: SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2))));
+  }
 }
