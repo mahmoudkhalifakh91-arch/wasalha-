@@ -30,6 +30,9 @@ workflows:
 
       - name: تطبيق إعدادات وصلها على مشروع الأندرويد (applicationId + صلاحيات + أيقونات)
         script: |
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 --decode > android_overrides/google-services.json
+          fi
           python3 tools/patch_android.py
 
       - name: إعداد توقيع الـ Release (keystore ثابت)

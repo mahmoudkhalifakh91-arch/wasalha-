@@ -13,7 +13,24 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initFirebase();
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await NotificationService.init();
+  try {
+    await NotificationService.init();
+  } catch (e) {
+    debugPrint('NotificationService.init failed: $e');
+  }
+  // في الـ release أي خطأ في بناء الواجهة كان بيطلع شاشة رمادي بدون سبب.
+  // دلوقتي بيظهر نص الخطأ عشان نعرف نصلحه.
+  ErrorWidget.builder = (details) => Material(
+        color: Colors.white,
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 48, 16, 16),
+            child: Text('UI error:\n${details.exceptionAsString()}',
+                style: const TextStyle(fontSize: 11, color: Colors.red)),
+          ),
+        ),
+      );
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,

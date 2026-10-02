@@ -64,3 +64,48 @@ if os.path.isdir(v21):
     shutil.copy2(os.path.join(src, 'drawable', 'launch_background.xml'),
                  os.path.join(v21, 'launch_background.xml'))
 print('copied icons / splash / colors')
+
+
+# 4) google-services.json + إضافة الـ plugin (مطلوب لتسجيل الدخول بجوجل)
+gs_src = os.path.join(ROOT, 'android_overrides', 'google-services.json')
+if os.path.exists(gs_src):
+    shutil.copy2(gs_src, os.path.join(APP, 'google-services.json'))
+    import json
+    try:
+        pkgs = [c['client_info']['android_client_info']['package_name']
+                for c in json.load(open(gs_src, encoding='utf-8'))['client']]
+        print('google-services.json packages:', pkgs)
+        if 'com.wasalah.app' not in pkgs:
+            sys.exit('google-services.json مش لـ com.wasalah.app — نزّل الملف الصح من Firebase')
+    except (KeyError, ValueError) as e:
+        sys.exit(f'google-services.json شكله غير صحيح: {e}')
+
+    PLUGIN_ID = 'com.google.gms.google-services'
+    # settings.gradle.kts (طريقة plugins الجديدة)
+    sp = os.path.join(ROOT, 'android', 'settings.gradle.kts')
+    if os.path.exists(sp):
+        t = open(sp, encoding='utf-8').read()
+        if PLUGIN_ID not in t:
+            t = re.sub(r'(id\("com\.android\.application"\)\s+version\s+"[^"]+"\s+apply\s+false)',
+                       r'\1\n    id("' + PLUGIN_ID + '") version "4.4.2" apply false', t, count=1)
+            open(sp, 'w', encoding='utf-8').write(t)
+    for name in ('build.gradle.kts', 'build.gradle'):
+        bp = os.path.join(APP, name)
+        if not os.path.exists(bp):
+            continue
+        t = open(bp, encoding='utf-8').read()
+        if PLUGIN_ID not in t:
+            anchor = 'dev.flutter.flutter-gradle-plugin'
+            line = ('    id("' + PLUGIN_ID + '")') if name.endswith('.kts') else ("    id '" + PLUGIN_ID + "'")
+            if anchor in t:
+                t = re.sub(r'([^\n]*' + re.escape(anchor) + r'[^\n]*\n)', lambda m: m.group(1) + line + '\n', t, count=1)
+            else:
+                t = t.replace('plugins {', 'plugins {\n' + line, 1)
+            open(bp, 'w', encoding='utf-8').write(t)
+            print('added google-services plugin to', name)
+else:
+    print('WARNING: android_overrides/google-services.json مش موجود — تسجيل الدخول بجوجل مش هيشتغل')
+
+# 5) تأكيد اسم التطبيق
+m = open(mp, encoding='utf-8').read()
+print('APP LABEL =>', re.findall(r'android:label="([^"]*)"', m))
